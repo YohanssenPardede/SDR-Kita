@@ -12,15 +12,16 @@ def main():
     st.title("SDR Kita")
     
     # Membuat dua tab
-    tab1, tab2 = st.tabs(["Menu Layouting", "Menu Retail"])
+    tab1, tab2 = st.tabs(["Menu Retail", "Menu Layouting"])
 
     with tab1:
+        # Memanggil fungsi dari file retail.py
+        show_retail_content()
+    
+    with tab2:
         # Memanggil fungsi dari file app.py
         show_layouting_content() 
 
-    with tab2:
-        # Memanggil fungsi dari file retail.py
-        show_retail_content()
-
 if __name__ == "__main__":
+
     main()
