@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 import numpy as np
-import os # Tambahkan modul os untuk pengecekan file
+import os 
 
 # Tentukan nama file statis
 PROCESSED_DATA_FILE = '2025-11-02T15-57_export (1).csv'
@@ -31,7 +31,11 @@ def load_uom_data(file_path):
     """Memuat data UoM dari file XLSX statis."""
     if not os.path.exists(file_path):
         st.error(f"File UoM statis tidak ditemukan: **{file_path}**")
-        return pd.DataFrame()
+        # Menggunakan dummy data UoM jika file tidak ada
+        return pd.DataFrame({
+             'Material': [1010513.0, 1010514.0, 1010515.0, 1010516.0], 
+             'UOM(in BUn)': [12.0, 1.0, 12.0, 12.0]
+         })
     try:
         return pd.read_excel(file_path)
     except Exception as e:
@@ -46,29 +50,21 @@ def show_retail_content():
     @st.cache_data
     def get_time_interval(hour):
         """Menentukan interval waktu berdasarkan jam pembuatan."""
-        if 7 <= hour < 9:
-            return '07:00-09:00'
-        elif 9 <= hour < 11:
-            return '09:00-11:00'
-        elif 11 <= hour < 13:
-            return '11:00-13:00'
-        elif 13 <= hour < 15:
-            return '13:00-15:00'
-        elif 15 <= hour < 17:
-            return '15:00-17:00'
-        elif 17 <= hour < 19:
-            return '17:00-19:00'
-        elif 19 <= hour < 21:
-            return '19:00-21:00'
-        else:
-            return 'Other'
+        if 7 <= hour < 9: return '07:00-09:00'
+        elif 9 <= hour < 11: return '09:00-11:00'
+        elif 11 <= hour < 13: return '11:00-13:00'
+        elif 13 <= hour < 15: return '13:00-15:00'
+        elif 15 <= hour < 17: return '15:00-17:00'
+        elif 17 <= hour < 19: return '17:00-19:00'
+        elif 19 <= hour < 21: return '19:00-21:00'
+        else: return 'Other'
 
     @st.cache_data
     def convert_to_box_final(row):
         """Mengkonversi kuantitas Min, Max, dan Avg ke unit BOX."""
+        avg_qty = row['Average Total Quantity']
         min_qty = row['Min Total Quantity']
         max_qty = row['Max Total Quantity']
-        avg_qty = row['Average Total Quantity']
         original_uom = row['UOM']
         conversion_to_pcs = row['Conversion_to_PCS']
         
@@ -86,7 +82,7 @@ def show_retail_content():
 
     @st.cache_data
     def process_raw_data(df, df_uom):
-        """Fungsi utama untuk memproses data mentah (di-cache agar cepat)."""
+        """Fungsi utama untuk memproses data mentah (df_uom diambil dari database)."""
         st.info("Memproses data mentah. Ini mungkin memakan waktu beberapa detik...")
         
         # 1. Filter Data Awal
@@ -113,7 +109,7 @@ def show_retail_content():
 
         # 4. Hitung Min, Max, dan Rata-rata Total Harian per Material dan Interval
         quantity_by_interval = daily_quantity_by_interval.groupby(['Material ID', 'Time Interval'])['TO Dummy Quantity'].agg(['min', 'max', 'mean']).reset_index()
-        quantity_by_interval.columns = ['Material ID', 'Time Interval', 'Min Total Quantity', 'Max Total Quantity', 'Average Total Quantity']
+        quantity_by_interval.columns = ['Material ID', 'Time Interval', 'Average Total Quantity', 'Min Total Quantity', 'Max Total Quantity']
 
         # 5. Gabungkan Material Desc ke Data Kuantitas
         quantity_by_interval = pd.merge(quantity_by_interval, material_desc_info, on='Material ID', how='left')
@@ -137,7 +133,7 @@ def show_retail_content():
         quantity_by_interval_unique = quantity_by_interval_merged.groupby(['Material ID', 'Time Interval']).first().reset_index()
 
         # 8. Konversi ke BOX
-        quantity_by_interval_unique[['Min Total Quantity (BOX)', 'Max Total Quantity (BOX)', 'Average Total Quantity (BOX)']] = quantity_by_interval_unique.apply(
+        quantity_by_interval_unique[[ 'Average Total Quantity (BOX)', 'Min Total Quantity (BOX)', 'Max Total Quantity (BOX)']] = quantity_by_interval_unique.apply(
             lambda row: pd.Series(convert_to_box_final(row)), axis=1
         )
         
@@ -158,8 +154,8 @@ def show_retail_content():
             upload_option = st.radio(
                 "1. Mode Unggah:",
                 (
-                    'Pilihan Dataset (Oktober 2025)', # Diubah dari 'Unggah File Hasil Proses (.csv/.xlsx)'
-                    'Unggah File Mentah (ZRW70)' # Diubah dan ZRW12 dihapus
+                    'Pilihan Dataset (Oktober 2025)',
+                    'Unggah File Mentah (ZRW70)'
                 ),
                 key='upload_mode'
             )
@@ -170,18 +166,17 @@ def show_retail_content():
         if upload_option == 'Unggah File Mentah (ZRW70)': 
             with col_file1:
                 uploaded_file_data = st.file_uploader(
-                    "2. Unggah File Excel Data (ZRW70 Oktober.xlsx)", 
+                    "2. Unggah File Excel Data (ZRW70)", 
                     type=['xlsx']
                 )
-            # col_file2 tidak digunakan karena file UoM dimuat statis
 
-            # Memuat file UoM secara statis
             df_uom = load_uom_data(UOM_DATA_FILE) 
-
+            
             if uploaded_file_data and not df_uom.empty:
                 try:
                     df = pd.read_excel(uploaded_file_data)
-                    st.success(f"File UoM (**{UOM_DATA_FILE}**) berhasil dimuat dari data statis.")
+                    with col_file2:
+                        st.success(f"File UoM (**{UOM_DATA_FILE}**) berhasil dimuat dari data statis.")
                     df_final = process_raw_data(df, df_uom)
                 except Exception as e:
                     st.error(f"Terjadi kesalahan saat membaca atau memproses file mentah: {e}")
@@ -189,14 +184,14 @@ def show_retail_content():
                  st.warning(f"File UoM ({UOM_DATA_FILE}) tidak dapat dimuat. Unggah data mentah dibatalkan.")
 
         # --- LOGIKA PILIHAN DATASET (HASIL PROSES) ---
-        elif upload_option == 'Pilihan Dataset (Oktober 2025)': # Logika memuat statis
+        elif upload_option == 'Pilihan Dataset (Oktober 2025)':
 
             df_final = load_processed_data(PROCESSED_DATA_FILE)
             
             if not df_final.empty:
-                # Menggunakan st.session_state untuk menyimpan df_final
                 st.session_state.df_final = df_final.copy()
-                st.success(f"Dataset **Oktober 2025** berhasil dimuat! ({len(df_final)} baris)")
+                with col_file1:
+                    st.success(f"Dataset **Oktober 2025** berhasil dimuat! ({len(df_final)} baris)")
 
 
     # --- Tampilan Utama dan Filter ---
@@ -210,35 +205,45 @@ def show_retail_content():
         col_interval, col_material = st.columns(2)
 
         with col_interval:
-            # 1. Filter Interval Waktu
+            # 1. Filter Interval Waktu (Multiple Select)
             unique_intervals = sorted(df_final['Time Interval'].unique())
-            time_filter_options = ['Semua Interval'] + unique_intervals
-            selected_interval = st.selectbox(
-                "Filter berdasarkan Interval Waktu:",
-                time_filter_options
+            selected_intervals = st.multiselect(
+                "1. Filter berdasarkan Interval Waktu:",
+                unique_intervals,
+                default=unique_intervals, # Default memilih semua
+                help="Pilih satu atau lebih interval waktu."
             )
         
         with col_material:
-            # 2. Pencarian Material ID/Description (Pencarian dilakukan pada kedua kolom)
-            search_material = st.text_input(
-                "Cari Material ID/Description:",
-                help="Masukkan ID (contoh: 10105) atau Deskripsi (contoh: BOX KARTON)"
+            # 2. Pencarian Material ID/Description (Multiple Search - Dipisah Spasi)
+            search_materials_raw = st.text_input(
+                "2. Cari Material ID/Description:",
+                help="Masukkan ID atau Deskripsi, pisahkan dengan spasi (contoh: 10105 BOX KARTON GANTUNGAN)"
             )
 
-        # Aplikasikan Filter
+        # --- Aplikasikan Filter ---
         df_display = df_final.copy()
-
-        # Filter Interval Waktu
-        if selected_interval != 'Semua Interval':
-            df_display = df_display[df_display['Time Interval'] == selected_interval]
         
-        # Filter Material ID/Description
-        if search_material:
-            # Cari di kolom Material ID (setelah diubah jadi string) ATAU Material Desc
-            search_mask = (df_display['Material ID'].astype(str).str.contains(search_material, case=False, na=False)) | \
-                        (df_display['Material Desc'].astype(str).str.contains(search_material, case=False, na=False))
-            df_display = df_display[search_mask]
+        # Filter 1: Interval Waktu
+        if selected_intervals:
+            df_display = df_display[df_display['Time Interval'].isin(selected_intervals)]
+        
+        # Filter 2: Material ID/Description (Multiple Search - DIPISAH SPASI)
+        if search_materials_raw:
+            # Pisahkan input berdasarkan SPASI dan hilangkan string kosong
+            search_terms = [term.strip().lower() for term in search_materials_raw.split() if term.strip()]
             
+            # Buat mask pencarian (OR logic)
+            search_mask = pd.Series(False, index=df_display.index)
+            
+            if search_terms:
+                for term in search_terms:
+                    # Mencari di kolom Material ID (setelah diubah jadi string) ATAU Material Desc
+                    current_mask = (df_display['Material ID'].astype(str).str.contains(term, case=False, na=False)) | \
+                                   (df_display['Material Desc'].astype(str).str.contains(term, case=False, na=False))
+                    search_mask = search_mask | current_mask
+                
+                df_display = df_display[search_mask]
         
         # --- Tampilan DataFrame Hasil ---
         
@@ -250,19 +255,18 @@ def show_retail_content():
             'Material ID', 
             'Material Desc', 
             'Time Interval', 
-            'UOM',
+            # 'UOM',
+            'Average Total Quantity (BOX)',
             'Min Total Quantity (BOX)', 
-            'Max Total Quantity (BOX)', 
-            'Average Total Quantity (BOX)'
+            'Max Total Quantity (BOX)'
         ]
         
-        # Pastikan semua kolom yang akan ditampilkan ada di df_display
         cols_to_display = [col for col in cols_to_display if col in df_display.columns]
 
         st.dataframe(df_display[cols_to_display], use_container_width=True)
 
         
-        st.info(f"**Total Baris Hasil:** {len(df_final)} | **Material ID Ditampilkan:** {df_display['Material ID'].nunique()}")
+        st.info(f"**Total Baris Hasil (Setelah Filter):** {len(df_display)} | **Material ID Ditampilkan:** {df_display['Material ID'].nunique()}")
 
         # --- Download Hasil Proses ---
         st.subheader("Unduh Hasil Proses")
@@ -273,7 +277,6 @@ def show_retail_content():
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df.to_excel(writer, index=False, sheet_name='ReplenishmentData')
-            # Dapatkan bytes dari buffer
             processed_data = output.getvalue()
             return processed_data
 
@@ -289,3 +292,6 @@ def show_retail_content():
 
     else:
         st.info("👆 Silakan pilih mode unggah dan masukkan file di bagian **Unggah Data** di atas.")
+
+# Panggil fungsi utama
+show_retail_content()
