@@ -5,7 +5,7 @@ import numpy as np
 import os 
 
 # Tentukan nama file statis
-PROCESSED_DATA_FILE = '2025-11-02T15-57_export (1).csv'
+PROCESSED_DATA_FILE = '2025-11-02T15-57_export.xlsx'
 UOM_DATA_FILE = 'ZRW12-UoM.XLSX'
 
 # Fungsi untuk memuat file CSV hasil proses secara otomatis (di-cache agar cepat)
@@ -16,7 +16,7 @@ def load_processed_data(file_path):
         st.error(f"File dataset tidak ditemukan: **{file_path}**")
         return pd.DataFrame()
     try:
-        df = pd.read_csv(file_path)
+        df = pd.read_excel(file_path)
         # Konversi ulang tipe data yang mungkin berubah setelah disimpan/dibaca
         if 'Material ID' in df.columns:
             df['Material ID'] = df['Material ID'].astype('Int64', errors='ignore')
@@ -35,7 +35,7 @@ def load_uom_data(file_path):
         return pd.DataFrame({
              'Material': [1010513.0, 1010514.0, 1010515.0, 1010516.0], 
              'UOM(in BUn)': [12.0, 1.0, 12.0, 12.0]
-         })
+           })
     try:
         return pd.read_excel(file_path)
     except Exception as e:
@@ -86,6 +86,7 @@ def show_retail_content():
         st.info("Memproses data mentah. Ini mungkin memakan waktu beberapa detik...")
         
         # 1. Filter Data Awal
+        # Tambahkan 'Movement Type' ke dalam proses data jika ada di kolom mentah
         df_filtered = df[df['Storage Type Suggestion'] == 'ZYY'].copy()
 
         if df_filtered.empty:
@@ -100,19 +101,32 @@ def show_retail_content():
         excel_epoch = pd.to_datetime('1899-12-30')
         df_filtered['Created Date'] = pd.to_datetime(df_filtered['Created Date'], unit='D', origin=excel_epoch, errors='coerce')
         df_filtered['Material ID'] = df_filtered['Material ID'].astype(float)
-
-        # **Ekstrak Material ID dan Material Desc**
-        material_desc_info = df_filtered[['Material ID', 'Material Desc']].copy().drop_duplicates(subset=['Material ID'])
+        
+        # Kolom yang akan digabungkan ke hasil akhir
+        merge_cols = ['Material ID', 'Material Desc']
+        if 'Movement Type' in df_filtered.columns:
+            merge_cols.append('Movement Type')
+        
+        # **Ekstrak Material ID, Material Desc, dan Movement Type (jika ada)**
+        material_info = df_filtered[merge_cols].copy().drop_duplicates(subset=['Material ID', 'Movement Type'] if 'Movement Type' in df_filtered.columns else ['Material ID'])
         
         # 3. Hitung Kuantitas Total Harian per Interval
-        daily_quantity_by_interval = df_filtered.groupby(['Material ID', 'Created Date', 'Time Interval'])['TO Dummy Quantity'].sum().reset_index()
+        group_keys = ['Material ID', 'Created Date', 'Time Interval']
+        if 'Movement Type' in df_filtered.columns:
+            group_keys.append('Movement Type')
+            
+        daily_quantity_by_interval = df_filtered.groupby(group_keys)['TO Dummy Quantity'].sum().reset_index()
 
         # 4. Hitung Min, Max, dan Rata-rata Total Harian per Material dan Interval
-        quantity_by_interval = daily_quantity_by_interval.groupby(['Material ID', 'Time Interval'])['TO Dummy Quantity'].agg(['min', 'max', 'mean']).reset_index()
-        quantity_by_interval.columns = ['Material ID', 'Time Interval', 'Average Total Quantity', 'Min Total Quantity', 'Max Total Quantity']
+        group_keys_agg = ['Material ID', 'Time Interval']
+        if 'Movement Type' in daily_quantity_by_interval.columns:
+            group_keys_agg.append('Movement Type')
+            
+        quantity_by_interval = daily_quantity_by_interval.groupby(group_keys_agg)['TO Dummy Quantity'].agg(['min', 'max', 'mean']).reset_index()
+        quantity_by_interval.columns = group_keys_agg + ['Average Total Quantity', 'Min Total Quantity', 'Max Total Quantity']
 
-        # 5. Gabungkan Material Desc ke Data Kuantitas
-        quantity_by_interval = pd.merge(quantity_by_interval, material_desc_info, on='Material ID', how='left')
+        # 5. Gabungkan Material Desc & Movement Type ke Data Kuantitas
+        quantity_by_interval = pd.merge(quantity_by_interval, material_info, on=['Material ID', 'Movement Type'] if 'Movement Type' in material_info.columns else ['Material ID'], how='left')
 
         # 6. Pembersihan dan Persiapan Data UoM
         df_uom_cleaned = df_uom[['Material', 'UOM(in BUn)']].copy()
@@ -130,10 +144,16 @@ def show_retail_content():
             on='Material ID', 
             how='left'
         )
-        quantity_by_interval_unique = quantity_by_interval_merged.groupby(['Material ID', 'Time Interval']).first().reset_index()
+        
+        # Tentukan kunci unik untuk groupby
+        unique_keys = ['Material ID', 'Time Interval']
+        if 'Movement Type' in quantity_by_interval_merged.columns:
+            unique_keys.append('Movement Type')
+            
+        quantity_by_interval_unique = quantity_by_interval_merged.groupby(unique_keys).first().reset_index()
 
         # 8. Konversi ke BOX
-        quantity_by_interval_unique[[ 'Average Total Quantity (BOX)', 'Min Total Quantity (BOX)', 'Max Total Quantity (BOX)']] = quantity_by_interval_unique.apply(
+        quantity_by_interval_unique[[ 'Min Total Quantity (BOX)', 'Max Total Quantity (BOX)', 'Average Total Quantity (BOX)']] = quantity_by_interval_unique.apply(
             lambda row: pd.Series(convert_to_box_final(row)), axis=1
         )
         
@@ -189,6 +209,12 @@ def show_retail_content():
             df_final = load_processed_data(PROCESSED_DATA_FILE)
             
             if not df_final.empty:
+                # Perlu memastikan 'Movement Type' ada jika Anda menggunakan dataset statis
+                # Jika dataset statis tidak memiliki kolom 'Movement Type', filter tidak akan muncul.
+                if 'Movement Type' not in df_final.columns:
+                    # Tambahkan kolom dummy jika tidak ada, agar filter tidak error jika digunakan
+                    df_final['Movement Type'] = '999' # Nilai dummy
+                    
                 st.session_state.df_final = df_final.copy()
                 with col_file1:
                     st.success(f"Dataset **Oktober 2025** berhasil dimuat! ({len(df_final)} baris)")
@@ -201,34 +227,68 @@ def show_retail_content():
         st.header("📊 Replenishment Planning")
         st.markdown("---")
 
+        # --- Aplikasikan Filter ---
+        df_display = df_final.copy()
+
         # Kolom untuk menempatkan Filter di atas tabel
-        col_interval, col_material = st.columns(2)
+        col_interval, col_movement = st.columns(2)
+        col_material, col_empty = st.columns(2) # Tambah baris baru untuk filter material
 
         with col_interval:
-            # 1. Filter Interval Waktu (Multiple Select)
+            # 1. Filter Interval Waktu (Multiple Select) - Tanpa Default
             unique_intervals = sorted(df_final['Time Interval'].unique())
             selected_intervals = st.multiselect(
-                "1. Filter berdasarkan Interval Waktu:",
+                "1. Filter berdasarkan **Interval Waktu**:",
                 unique_intervals,
-                default=unique_intervals, # Default memilih semua
-                help="Pilih satu atau lebih interval waktu."
+                default=None, # Mengubah default menjadi None/[] agar tidak ada yang terpilih
+                help="Pilih satu atau lebih interval waktu. Tidak ada nilai default yang terpilih."
             )
         
+        with col_movement:
+            # 2. Filter Movement Type (Multiple Select)
+            if 'Movement Type' in df_final.columns:
+                
+                # --- PERBAIKAN: Konversi ke String dan isi NaN/None ---
+                # Mengubah semua tipe data ke string, dan mengisi NaN/None dengan 'N/A' sebelum mengambil nilai unik
+                movement_series = df_final['Movement Type'].astype(str).replace({'nan': 'N/A', 'None': 'N/A'})
+                
+                unique_movement_types = sorted(movement_series.unique()) 
+                # --- AKHIR PERBAIKAN ---
+
+                selected_movement_types = st.multiselect(
+                    "2. Filter berdasarkan **Movement Type**:",
+                    unique_movement_types,
+                    default=unique_movement_types, # Default memilih semua
+                    help="Pilih satu atau lebih jenis Movement Type."
+                )
+                
+                # Filter harus menggunakan nilai yang sudah dikonversi ke string
+                if selected_movement_types:
+                    df_display = df_display[movement_series.isin(selected_movement_types)]
+                    
+            else:
+                selected_movement_types = None
+                st.info("Kolom 'Movement Type' tidak ada dalam dataset ini.")
+
+
         with col_material:
-            # 2. Pencarian Material ID/Description (Multiple Search - Dipisah Spasi)
+            # 3. Pencarian Material ID/Description (Multiple Search - Dipisah Spasi)
             search_materials_raw = st.text_input(
-                "2. Cari Material ID/Description:",
+                "3. Cari **Material ID/Description**:",
                 help="Masukkan ID atau Deskripsi, pisahkan dengan spasi (contoh: 10105 BOX KARTON GANTUNGAN)"
             )
 
-        # --- Aplikasikan Filter ---
-        df_display = df_final.copy()
         
         # Filter 1: Interval Waktu
+        # Hanya filter jika ada interval yang dipilih
         if selected_intervals:
             df_display = df_display[df_display['Time Interval'].isin(selected_intervals)]
+            
+        # Filter 2: Movement Type
+        if selected_movement_types and 'Movement Type' in df_display.columns:
+            df_display = df_display[df_display['Movement Type'].isin(selected_movement_types)]
         
-        # Filter 2: Material ID/Description (Multiple Search - DIPISAH SPASI)
+        # Filter 3: Material ID/Description (Multiple Search - DIPISAH SPASI)
         if search_materials_raw:
             # Pisahkan input berdasarkan SPASI dan hilangkan string kosong
             search_terms = [term.strip().lower() for term in search_materials_raw.split() if term.strip()]
@@ -254,13 +314,15 @@ def show_retail_content():
         cols_to_display = [
             'Material ID', 
             'Material Desc', 
+            'Movement Type', # Kolom baru
             'Time Interval', 
             # 'UOM',
             'Average Total Quantity (BOX)',
             'Min Total Quantity (BOX)', 
-            'Max Total Quantity (BOX)'
+            'Max Total Quantity (BOX)',
         ]
         
+        # Filter kolom yang benar-benar ada di DataFrame untuk menghindari error
         cols_to_display = [col for col in cols_to_display if col in df_display.columns]
 
         st.dataframe(df_display[cols_to_display], use_container_width=True)
