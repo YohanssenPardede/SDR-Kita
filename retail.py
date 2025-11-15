@@ -43,7 +43,7 @@ def load_uom_data(file_path):
         return pd.DataFrame()
 
 
-def show_retail_content():
+def show_retail1_content():
     st.title("📦 Replenishment Retail")
     st.markdown("Aplikasi untuk menganalisis kuantitas replenishment retail berdasarkan interval waktu.")
     
@@ -356,4 +356,4 @@ def show_retail_content():
         st.info("👆 Silakan pilih mode unggah dan masukkan file di bagian **Unggah Data** di atas.")
 
 # Panggil fungsi utama
-show_retail_content()
+show_retail1_content()
