@@ -157,7 +157,7 @@ def show_retail2_content():
             # Kolom yang ditampilkan
             # Definisikan kolom yang benar-benar ingin Anda lihat dan unduh
             display_cols = [
-                'Product Name', 'Material ID', chosen_avg_column, 'Pcs per Box',
+                'Product Name', 'Material ID', chosen_avg_column,
                 'Min Replenishment', 'Max Replenishment',
                 'Min Replenishment (Pcs)', 'Max Replenishment (Pcs)'
             ]
@@ -190,4 +190,5 @@ def show_retail2_content():
 
 
 # Panggil fungsi utama
+
 show_retail2_content()
