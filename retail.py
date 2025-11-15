@@ -44,8 +44,7 @@ def load_uom_data(file_path):
 
 
 def show_retail1_content():
-    st.title("📦 Replenishment Retail")
-    st.markdown("Aplikasi untuk menganalisis kuantitas replenishment retail berdasarkan interval waktu.")
+    st.title("📦 Replenishment Retail by Interval")
     
     @st.cache_data
     def get_time_interval(hour):
@@ -357,3 +356,4 @@ def show_retail1_content():
 
 # Panggil fungsi utama
 show_retail1_content()
+
