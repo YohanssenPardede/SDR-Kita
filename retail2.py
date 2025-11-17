@@ -155,7 +155,7 @@ def show_retail2_content():
         st.subheader("3. Template Min/Max (Opsional)")
         template_mode = st.radio(
             "Pilih Mode Input Template:",
-            ('Upload File', 'Baca dari Jalur Manual'),
+            ('Upload File', 'Template'),
             index=0
         )
         
@@ -168,8 +168,8 @@ def show_retail2_content():
             )
             df_template = load_replenishment_template_upload(uploaded_template)
         
-        elif template_mode == 'Baca dari Jalur Manual':
-            st.info(f"Membaca dari jalur: \n`{FILE_PATH_TEMPLATE_MANUAL}`")
+        elif template_mode == 'Template':
+            st.info(f"Membaca dari: \n`{FILE_PATH_TEMPLATE_MANUAL}`")
             df_template = load_replenishment_template_manual(FILE_PATH_TEMPLATE_MANUAL)
             # Jika gagal dimuat, df_template akan menjadi None, dan error akan ditampilkan
 
@@ -311,3 +311,4 @@ def show_retail2_content():
 
 # Panggil fungsi utama
 show_retail2_content()
+
