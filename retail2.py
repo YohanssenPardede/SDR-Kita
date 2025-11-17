@@ -123,7 +123,6 @@ def show_retail2_content():
             type=['xlsx']
         )
     with col2:
-        st.info(f"2. Data UoM dibaca otomatis dari: \n`{FILE_PATH_UOM_MANUAL}`")
         df_uom = load_uom_data_manual(FILE_PATH_UOM_MANUAL)
         if df_uom is None:
             st.stop()
@@ -274,3 +273,4 @@ def show_retail2_content():
 
 # Panggil fungsi utama
 show_retail2_content()
+
