@@ -133,7 +133,6 @@ def show_retail2_content():
 
     ## 🚀 Streamlit App
     st.title("📦 Retail Replenishment Min Max Planning")
-    st.markdown("Aplikasi ini menghitung Min/Max berdasarkan rata-rata *picking* dan dapat memperbarui template yang sudah ada.")
 
     # --- Uploader Layout ---
     col1, col2, col3 = st.columns([1, 1, 1])
@@ -141,18 +140,18 @@ def show_retail2_content():
     # KOLOM 1: Data Stok Utama
     with col1:
         uploaded_file = st.file_uploader(
-            "1. Upload Data Stok Utama (.xlsx)",
+            "1. Upload Data Retail Warehouse Stock Analysis (.xlsx)",
             type=['xlsx']
         )
     # KOLOM 2: Data UoM (Manual)
     with col2:
-        st.info(f"2. Data UoM dibaca otomatis dari: \n`{FILE_PATH_UOM_MANUAL}`")
+        # st.info(f"2. Data UoM dibaca otomatis dari: \n`{FILE_PATH_UOM_MANUAL}`")
         df_uom = load_uom_data_manual(FILE_PATH_UOM_MANUAL)
         if df_uom is None:
             st.stop()
     # KOLOM 3: Template (Pilihan Upload atau Manual)
     with col3:
-        st.subheader("3. Template Min/Max (Opsional)")
+        st.subheader("Template Min/Max (Opsional)")
         template_mode = st.radio(
             "Pilih Mode Input Template:",
             ('Upload File', 'Template'),
@@ -311,5 +310,6 @@ def show_retail2_content():
 
 # Panggil fungsi utama
 show_retail2_content()
+
 
 
