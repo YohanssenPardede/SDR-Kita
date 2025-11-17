@@ -312,3 +312,4 @@ def show_retail2_content():
 # Panggil fungsi utama
 show_retail2_content()
 
+
