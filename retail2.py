@@ -3,6 +3,13 @@ import pandas as pd
 import numpy as np
 from io import BytesIO
 
+# Konfigurasi Halaman (Dipindahkan ke luar fungsi untuk dijalankan sekali)
+st.set_page_config(
+    page_title="Retail Replenishment Min Max Planning",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 def show_retail2_content():
     # Definisi Jalur File UoM Manual
     # PASTIKAN FILE INI ADA DI FOLDER YANG SAMA DENGAN app.py atau ganti jalurnya
@@ -16,7 +23,7 @@ def show_retail2_content():
         if uploaded_file is None:
             return None
         try:
-            # 🔥 DAFTAR 8 KOLOM YANG DIPERBARUI
+            # DAFTAR 8 KOLOM YANG DIPERBARUI
             new_column_names = [
                 'Product Name', 
                 'Material ID', 
@@ -28,13 +35,12 @@ def show_retail2_content():
                 'Xdays'
             ]
             
-            # 🔥 usecols='A:H' digunakan untuk memastikan hanya 8 kolom (A hingga H) yang dibaca
-            # Ini mencegah error jika ada kolom kosong tambahan di sebelah kanan data.
+            # usecols='A:H' digunakan untuk memastikan hanya 8 kolom (A hingga H) yang dibaca
             df = pd.read_excel(
                 uploaded_file, 
                 skiprows=3, 
                 names=new_column_names, 
-                usecols='A:H' # Membaca 8 kolom pertama
+                usecols='A:H'
             ) 
             
             # Konversi tipe data untuk kolom kuantitas
@@ -44,7 +50,6 @@ def show_retail2_content():
             
             return df
         except Exception as e:
-            # Mengganti pesan error agar lebih informatif
             st.error(f"Error saat memuat atau memproses file data utama: {e}. Pastikan file memiliki 8 kolom yang dimulai dari baris ke-4.")
             return None
 
@@ -66,6 +71,24 @@ def show_retail2_content():
             st.error(f"Error saat memuat file UoM: {e}")
             return None
 
+    @st.cache_data
+    def load_replenishment_template(uploaded_file):
+        """Memuat dan memproses data template replenishment dari file Excel/CSV yang diunggah."""
+        if uploaded_file is None:
+            return None
+        try:
+            # Gunakan header=0 untuk memastikan baris pertama digunakan sebagai nama kolom
+            df_template = pd.read_excel(uploaded_file, header=0) 
+            # Pastikan kolom kunci ada
+            required_cols = ['Material', 'Min', 'Max']
+            if not all(col in df_template.columns for col in required_cols):
+                st.error(f"Template harus memiliki kolom: {', '.join(required_cols)}")
+                return None
+            return df_template
+        except Exception as e:
+            st.error(f"Error saat memuat file template: {e}")
+            return None
+
     def calculate_replenishment(df, chosen_avg_column, max_multiplier=1.5):
         """Menghitung Min/Max Replenishment (dalam Box dan Pcs)."""
         df['Min Replenishment'] = df[chosen_avg_column].fillna(0).round().astype(int)
@@ -80,36 +103,45 @@ def show_retail2_content():
     def convert_df_to_excel(df):
         """Mengubah DataFrame menjadi file Excel dalam format Bytes."""
         output = BytesIO()
-        # Menggunakan engine openpyxl untuk format .xlsx
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Replenishment_Analysis')
+            # Pastikan kolom kunci 'Material' di template tidak diubah tipenya sebelum ini
+            df.to_excel(writer, index=False, sheet_name='Replenishment_Update')
         
         processed_data = output.getvalue()
         return processed_data
 
     ## 🚀 Streamlit App
     st.title("📦 Retail Replenishment Min Max Planning")
+    st.markdown("Aplikasi ini menghitung Min/Max berdasarkan rata-rata *picking* dan dapat memperbarui template yang sudah ada.")
 
-    col1, col2 = st.columns([1, 2])
+    # --- Uploader Layout ---
+    col1, col2, col3 = st.columns([1, 1, 1])
 
     with col1:
         uploaded_file = st.file_uploader(
-            "Upload File Retail Warehouse Stock Analysis",
+            "1. Upload Data Stok Utama (.xlsx)",
             type=['xlsx']
         )
-
     with col2:
+        st.info(f"2. Data UoM dibaca otomatis dari: \n`{FILE_PATH_UOM_MANUAL}`")
         df_uom = load_uom_data_manual(FILE_PATH_UOM_MANUAL)
         if df_uom is None:
             st.stop()
+    with col3:
+        uploaded_template = st.file_uploader(
+            "3. (Opsional) Upload Template Min/Max (.xlsx)",
+            type=['xlsx', 'csv']
+        )
+        df_template = load_replenishment_template(uploaded_template)
 
+    # --- Logika Utama ---
     if uploaded_file and df_uom is not None:
         df = load_and_process_main_data(uploaded_file)
 
         if df is not None:
-            st.success("Data Retail Warehouse Stock Analysis berhasil dimuat!")
+            st.success("Data Stok Utama berhasil dimuat!")
 
-            # 1. Penggabungan Data (Merge)
+            # 1. Penggabungan Data (Merge UoM)
             try:
                 df = pd.merge(
                     df,
@@ -120,6 +152,7 @@ def show_retail2_content():
                 )
                 df.rename(columns={'UOM(in BUn)': 'Pcs per Box'}, inplace=True)
                 df.drop(columns=['Material'], inplace=True)
+                st.info("Data UoM telah berhasil digabungkan (Merged).")
             except Exception as e:
                 st.error(f"Gagal saat menggabungkan data UoM: {e}")
                 st.stop()
@@ -148,55 +181,87 @@ def show_retail2_content():
                 )
 
             # 2. Kalkulasi Min/Max Replenishment
-            # Lakukan kalkulasi sekali dan simpan hasilnya
             df_full_result = calculate_replenishment(df.copy(), chosen_avg_column, max_multiplier)
 
-            # --- FITUR PENCARIAN BARU ---
+            # --- FITUR PENCARIAN ---
             st.subheader("🔍 Filter Data Hasil")
             search_query = st.text_input(
                 "Cari berdasarkan Material ID atau Product Name:",
                 placeholder="Masukkan ID Material atau Nama Produk",
             )
 
-            # Menerapkan Filter
+            # Menerapkan Filter Baris
             df_filtered = df_full_result.copy()
             if search_query:
-                # Menggunakan .str.contains() untuk pencarian fleksibel (case-insensitive)
-                # Material ID diubah ke string untuk pencarian yang konsisten
                 mask = (
                     df_filtered['Material ID'].astype(str).str.contains(search_query, case=False, na=False) |
                     df_filtered['Product Name'].str.contains(search_query, case=False, na=False)
                 )
                 df_filtered = df_filtered[mask]
 
-            # --- Hasil dan Download ---
+            # --- Hasil & Download ---
             st.subheader("✅ Hasil Kalkulasi Replenishment")
             
             # Kolom yang ditampilkan
-            # Definisikan kolom yang benar-benar ingin Anda lihat dan unduh
             display_cols = [
-                'Product Name', 'Material ID', chosen_avg_column,
+                'Product Name', 'Material ID', chosen_avg_column, 'Pcs per Box',
                 'Min Replenishment', 'Max Replenishment',
                 'Min Replenishment (Pcs)', 'Max Replenishment (Pcs)'
             ]
 
-            # Menampilkan data yang SUDAH DIFILTER
+            # Menampilkan data yang SUDAH DIFILTER BARIS
             st.dataframe(df_filtered[display_cols], use_container_width=True)
 
             st.info(f"Ditampilkan **{len(df_filtered)}** dari total **{len(df_full_result)}** item.")
             
-            # Tombol Download
-            df_to_download = df_filtered.copy() # Ambil data yang ditampilkan (filtered baris)
+            # Tombol Download Logic
+            df_to_download = df_filtered.copy()
+            file_name = 'retail_stock_replenishment_filtered_analysis.xlsx'
+            download_label = "📥 Download Hasil Analisis (Excel XLSX)"
 
-            # HANYA AMBIL KOLOM YANG DITAMPILKAN SEBELUM KONVERSI KE EXCEL
-            df_to_download = df_to_download[display_cols] 
+            # 🔥 LOGIKA PEMBARUAN TEMPLATE (Jika template diunggah)
+            if df_template is not None:
+                st.subheader("🔄 Template Diperbarui Siap Diunduh")
+                
+                # 1. Pilih kolom yang dibutuhkan dari hasil analisis
+                update_data = df_full_result[['Material ID', 'Min Replenishment (Pcs)', 'Max Replenishment']].copy()
+                
+                # 2. Gabungkan template dengan hasil analisis (menggunakan Material ID = Material)
+                df_template_merged = pd.merge(
+                    df_template, 
+                    update_data, 
+                    left_on='Material', 
+                    right_on='Material ID', 
+                    how='left'
+                )
 
+                # 3. Timpa kolom Min dan Max jika ada nilai baru (non-NaN)
+                # Min Replenishment (Pcs) mengganti Min
+                # Max Replenishment (Box) mengganti Max
+                df_template_merged['Min'] = df_template_merged['Min Replenishment (Pcs)'].combine_first(df_template_merged['Min'])
+                df_template_merged['Max'] = df_template_merged['Max Replenishment'].combine_first(df_template_merged['Max'])
+                
+                # 4. Bersihkan kolom bantu dan siapkan untuk download
+                df_template_updated = df_template_merged.drop(columns=['Material ID', 'Min Replenishment (Pcs)', 'Max Replenishment'], errors='ignore')
+                
+                st.write("Preview Template yang Diperbarui (10 baris pertama):")
+                st.dataframe(df_template_updated.head(10), use_container_width=True) 
+                
+                # Set data yang akan diunduh sebagai template yang diperbarui
+                df_to_download = df_template_updated.copy()
+                file_name = 'retail_replenishment_TEMPLATE_UPDATED.xlsx'
+                download_label = "📥 Download Template Excel yang Diperbarui"
+            else:
+                # Filter kolom untuk hasil analisis jika tidak ada template
+                df_to_download = df_to_download[display_cols]
+            
+            # Button Download
             excel_data = convert_df_to_excel(df_to_download)
 
             st.download_button(
-                label="📥 Download Hasil Analisis (Excel XLSX)",
+                label=download_label,
                 data=excel_data,
-                file_name='retail_stock_replenishment_filtered_analysis.xlsx',
+                file_name=file_name,
                 mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             )
 
@@ -208,6 +273,4 @@ def show_retail2_content():
 
 
 # Panggil fungsi utama
-
 show_retail2_content()
-
