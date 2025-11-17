@@ -16,18 +16,36 @@ def show_retail2_content():
         if uploaded_file is None:
             return None
         try:
+            # 🔥 DAFTAR 8 KOLOM YANG DIPERBARUI
             new_column_names = [
-                'Product Name', 'Material ID', 'Movement Category Retail', 'Min-Max Recommendation Assessment',
-                'Avg Picking (Month-1) in Box', 'Avg Last 14 Days in Box', 'Avg Last 3 Days in Box',
-                'Stock in Box', 'Xdays'
+                'Product Name', 
+                'Material ID', 
+                'Movement Category Retail', 
+                'Avg Picking (Month-1) in Box', 
+                'Avg Last 14 Days in Box', 
+                'Avg Last 3 Days in Box',
+                'Stock in Box', 
+                'Xdays'
             ]
-            df = pd.read_excel(uploaded_file, skiprows=3, names=new_column_names)
+            
+            # 🔥 usecols='A:H' digunakan untuk memastikan hanya 8 kolom (A hingga H) yang dibaca
+            # Ini mencegah error jika ada kolom kosong tambahan di sebelah kanan data.
+            df = pd.read_excel(
+                uploaded_file, 
+                skiprows=3, 
+                names=new_column_names, 
+                usecols='A:H' # Membaca 8 kolom pertama
+            ) 
+            
+            # Konversi tipe data untuk kolom kuantitas
             quantity_cols = [col for col in new_column_names if 'Box' in col]
             for col in quantity_cols:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
+            
             return df
         except Exception as e:
-            st.error(f"Error saat memuat atau memproses file data utama: {e}")
+            # Mengganti pesan error agar lebih informatif
+            st.error(f"Error saat memuat atau memproses file data utama: {e}. Pastikan file memiliki 8 kolom yang dimulai dari baris ke-4.")
             return None
 
     @st.cache_data
@@ -192,3 +210,4 @@ def show_retail2_content():
 # Panggil fungsi utama
 
 show_retail2_content()
+
