@@ -10,11 +10,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-def show_retail2_content():
-    # Definisi Jalur File UoM Manual
-    # PASTIKAN FILE INI ADA DI FOLDER YANG SAMA DENGAN app.py atau ganti jalurnya
-    FILE_PATH_UOM_MANUAL = 'ZRW12-UoM.XLSX'
+# Definisi Jalur File UoM Manual (tetap sama)
+FILE_PATH_UOM_MANUAL = 'ZRW12-UoM.XLSX'
 
+# 🔥 Definisi Jalur File Template Manual (BARU)
+FILE_PATH_TEMPLATE_MANUAL = 'NZTW65PA Template.xlsx'
+
+
+def show_retail2_content():
+    
     ## 🎯 Fungsi Utama Pemrosesan Data
 
     @st.cache_data
@@ -71,23 +75,41 @@ def show_retail2_content():
             st.error(f"Error saat memuat file UoM: {e}")
             return None
 
+    # Fungsi untuk memuat template dari UPLOAD
     @st.cache_data
-    def load_replenishment_template(uploaded_file):
+    def load_replenishment_template_upload(uploaded_file):
         """Memuat dan memproses data template replenishment dari file Excel/CSV yang diunggah."""
         if uploaded_file is None:
             return None
         try:
-            # Gunakan header=0 untuk memastikan baris pertama digunakan sebagai nama kolom
             df_template = pd.read_excel(uploaded_file, header=0) 
-            # Pastikan kolom kunci ada
             required_cols = ['Material', 'Min', 'Max']
             if not all(col in df_template.columns for col in required_cols):
                 st.error(f"Template harus memiliki kolom: {', '.join(required_cols)}")
                 return None
             return df_template
         except Exception as e:
-            st.error(f"Error saat memuat file template: {e}")
+            st.error(f"Error saat memuat file template dari upload: {e}")
             return None
+
+    # 🔥 Fungsi baru untuk memuat template secara MANUAL
+    @st.cache_data
+    def load_replenishment_template_manual(file_path):
+        """Memuat dan memproses data template replenishment dari jalur file yang ditentukan."""
+        try:
+            df_template = pd.read_excel(file_path, header=0) 
+            required_cols = ['Material', 'Min', 'Max']
+            if not all(col in df_template.columns for col in required_cols):
+                st.error(f"Template manual harus memiliki kolom: {', '.join(required_cols)}")
+                return None
+            return df_template
+        except FileNotFoundError:
+            st.error(f"File template manual tidak ditemukan di jalur: **{file_path}**. Harap letakkan file tersebut di direktori yang sama atau ganti jalurnya.")
+            return None
+        except Exception as e:
+            st.error(f"Error saat memuat file template manual: {e}")
+            return None
+
 
     def calculate_replenishment(df, chosen_avg_column, max_multiplier=1.5):
         """Menghitung Min/Max Replenishment (dalam Box dan Pcs)."""
@@ -104,7 +126,6 @@ def show_retail2_content():
         """Mengubah DataFrame menjadi file Excel dalam format Bytes."""
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # Pastikan kolom kunci 'Material' di template tidak diubah tipenya sebelum ini
             df.to_excel(writer, index=False, sheet_name='Replenishment_Update')
         
         processed_data = output.getvalue()
@@ -117,21 +138,40 @@ def show_retail2_content():
     # --- Uploader Layout ---
     col1, col2, col3 = st.columns([1, 1, 1])
 
+    # KOLOM 1: Data Stok Utama
     with col1:
         uploaded_file = st.file_uploader(
             "1. Upload Data Stok Utama (.xlsx)",
             type=['xlsx']
         )
+    # KOLOM 2: Data UoM (Manual)
     with col2:
+        st.info(f"2. Data UoM dibaca otomatis dari: \n`{FILE_PATH_UOM_MANUAL}`")
         df_uom = load_uom_data_manual(FILE_PATH_UOM_MANUAL)
         if df_uom is None:
             st.stop()
+    # KOLOM 3: Template (Pilihan Upload atau Manual)
     with col3:
-        uploaded_template = st.file_uploader(
-            "3. (Opsional) Upload Template Min/Max (.xlsx)",
-            type=['xlsx', 'csv']
+        st.subheader("3. Template Min/Max (Opsional)")
+        template_mode = st.radio(
+            "Pilih Mode Input Template:",
+            ('Upload File', 'Baca dari Jalur Manual'),
+            index=0
         )
-        df_template = load_replenishment_template(uploaded_template)
+        
+        df_template = None
+        
+        if template_mode == 'Upload File':
+            uploaded_template = st.file_uploader(
+                "Upload Template Min/Max (.xlsx)",
+                type=['xlsx', 'csv']
+            )
+            df_template = load_replenishment_template_upload(uploaded_template)
+        
+        elif template_mode == 'Baca dari Jalur Manual':
+            st.info(f"Membaca dari jalur: \n`{FILE_PATH_TEMPLATE_MANUAL}`")
+            df_template = load_replenishment_template_manual(FILE_PATH_TEMPLATE_MANUAL)
+            # Jika gagal dimuat, df_template akan menjadi None, dan error akan ditampilkan
 
     # --- Logika Utama ---
     if uploaded_file and df_uom is not None:
@@ -218,7 +258,7 @@ def show_retail2_content():
             file_name = 'retail_stock_replenishment_filtered_analysis.xlsx'
             download_label = "📥 Download Hasil Analisis (Excel XLSX)"
 
-            # 🔥 LOGIKA PEMBARUAN TEMPLATE (Jika template diunggah)
+            # 🔥 LOGIKA PEMBARUAN TEMPLATE (Jika template berhasil dimuat, baik dari upload maupun manual)
             if df_template is not None:
                 st.subheader("🔄 Template Diperbarui Siap Diunduh")
                 
@@ -235,8 +275,6 @@ def show_retail2_content():
                 )
 
                 # 3. Timpa kolom Min dan Max jika ada nilai baru (non-NaN)
-                # Min Replenishment (Pcs) mengganti Min
-                # Max Replenishment (Box) mengganti Max
                 df_template_merged['Min'] = df_template_merged['Min Replenishment (Pcs)'].combine_first(df_template_merged['Min'])
                 df_template_merged['Max'] = df_template_merged['Max Replenishment'].combine_first(df_template_merged['Max'])
                 
@@ -273,4 +311,3 @@ def show_retail2_content():
 
 # Panggil fungsi utama
 show_retail2_content()
-
