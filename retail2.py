@@ -92,7 +92,7 @@ def show_retail2_content():
             st.error(f"Error saat memuat file template dari upload: {e}")
             return None
 
-    # 🔥 Fungsi baru untuk memuat template secara MANUAL
+    # Fungsi baru untuk memuat template secara MANUAL
     @st.cache_data
     def load_replenishment_template_manual(file_path):
         """Memuat dan memproses data template replenishment dari jalur file yang ditentukan."""
@@ -111,9 +111,11 @@ def show_retail2_content():
             return None
 
 
-    def calculate_replenishment(df, chosen_avg_column, max_multiplier=1.5):
+    # 🔥 PERUBAHAN FUNGSI: Menambahkan min_multiplier
+    def calculate_replenishment(df, chosen_avg_column, min_multiplier=1.0, max_multiplier=1.5):
         """Menghitung Min/Max Replenishment (dalam Box dan Pcs)."""
-        df['Min Replenishment'] = df[chosen_avg_column].fillna(0).round().astype(int)
+        # Min Replenishment sekarang menggunakan slider
+        df['Min Replenishment'] = (df[chosen_avg_column] * min_multiplier).fillna(0).round().astype(int)
         df['Max Replenishment'] = (df[chosen_avg_column] * max_multiplier).fillna(0).round().astype(int)
 
         df['Min Replenishment (Pcs)'] = (df['Min Replenishment'] * df['Pcs per Box']).fillna(0).round().astype(int)
@@ -126,6 +128,7 @@ def show_retail2_content():
         """Mengubah DataFrame menjadi file Excel dalam format Bytes."""
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Penulisan ke Excel: Headers akan mempertahankan nama kolom DataFrame (yaitu header template)
             df.to_excel(writer, index=False, sheet_name='Replenishment_Update')
         
         processed_data = output.getvalue()
@@ -145,7 +148,7 @@ def show_retail2_content():
         )
     # KOLOM 2: Data UoM (Manual)
     with col2:
-        # st.info(f"2. Data UoM dibaca otomatis dari: \n`{FILE_PATH_UOM_MANUAL}`")
+        st.info(f"2. Data UoM dibaca otomatis dari: \n`{FILE_PATH_UOM_MANUAL}`")
         df_uom = load_uom_data_manual(FILE_PATH_UOM_MANUAL)
         if df_uom is None:
             st.stop()
@@ -170,7 +173,6 @@ def show_retail2_content():
         elif template_mode == 'Template':
             st.info(f"Membaca dari: \n`{FILE_PATH_TEMPLATE_MANUAL}`")
             df_template = load_replenishment_template_manual(FILE_PATH_TEMPLATE_MANUAL)
-            # Jika gagal dimuat, df_template akan menjadi None, dan error akan ditampilkan
 
     # --- Logika Utama ---
     if uploaded_file and df_uom is not None:
@@ -201,15 +203,28 @@ def show_retail2_content():
             avg_cols = [col for col in df.columns if 'Avg' in col and 'Box' in col]
             default_index = avg_cols.index('Avg Picking (Month-1) in Box') if 'Avg Picking (Month-1) in Box' in avg_cols else 0
             
-            col_calc, col_mult = st.columns(2)
-            
+            col_calc, col_mult_min, col_mult_max = st.columns(3) # 🔥 3 KOLOM UNTUK SLIDER
+
             with col_calc:
                 chosen_avg_column = st.selectbox(
-                    "Pilih Kolom Rata-Rata untuk Basis Kalkulasi Min Replenishment (Box):",
+                    "Basis Rata-Rata Replenishment (Box):",
                     avg_cols,
                     index=default_index
                 )
-            with col_mult:
+            
+            # 🔥 SLIDER BARU UNTUK MIN REPLENISHMENT
+            with col_mult_min:
+                min_multiplier = st.slider(
+                    "Pengali untuk Min Replenishment:",
+                    min_value=0.5,
+                    max_value=2.0,
+                    value=1.0,
+                    step=0.1,
+                    help="Min Replenishment = Basis Rata-Rata * Pengali ini"
+                )
+
+            # SLIDER UNTUK MAX REPLENISHMENT
+            with col_mult_max:
                 max_multiplier = st.slider(
                     "Pengali untuk Max Replenishment:",
                     min_value=1.0,
@@ -219,7 +234,8 @@ def show_retail2_content():
                 )
 
             # 2. Kalkulasi Min/Max Replenishment
-            df_full_result = calculate_replenishment(df.copy(), chosen_avg_column, max_multiplier)
+            # 🔥 Mempassing kedua multiplier ke fungsi
+            df_full_result = calculate_replenishment(df.copy(), chosen_avg_column, min_multiplier, max_multiplier)
 
             # --- FITUR PENCARIAN ---
             st.subheader("🔍 Filter Data Hasil")
@@ -257,7 +273,7 @@ def show_retail2_content():
             file_name = 'retail_stock_replenishment_filtered_analysis.xlsx'
             download_label = "📥 Download Hasil Analisis (Excel XLSX)"
 
-            # 🔥 LOGIKA PEMBARUAN TEMPLATE (Jika template berhasil dimuat, baik dari upload maupun manual)
+            # LOGIKA PEMBARUAN TEMPLATE (Jika template berhasil dimuat)
             if df_template is not None:
                 st.subheader("🔄 Template Diperbarui Siap Diunduh")
                 
@@ -278,6 +294,7 @@ def show_retail2_content():
                 df_template_merged['Max'] = df_template_merged['Max Replenishment'].combine_first(df_template_merged['Max'])
                 
                 # 4. Bersihkan kolom bantu dan siapkan untuk download
+                # Kolom template asli (termasuk header template) dipertahankan di sini.
                 df_template_updated = df_template_merged.drop(columns=['Material ID', 'Min Replenishment (Pcs)', 'Max Replenishment'], errors='ignore')
                 
                 st.write("Preview Template yang Diperbarui (10 baris pertama):")
@@ -310,6 +327,3 @@ def show_retail2_content():
 
 # Panggil fungsi utama
 show_retail2_content()
-
-
-
