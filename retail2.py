@@ -82,7 +82,13 @@ def show_retail2_content():
         if uploaded_file is None:
             return None
         try:
-            df_template = pd.read_excel(uploaded_file, header=0) 
+            # 🔥 Perbaikan: Coba tentukan engine berdasarkan ekstensi
+            file_extension = uploaded_file.name.split('.')[-1].lower()
+            engine = 'openpyxl' if file_extension in ['xlsx', 'xls'] else None
+            
+            # Jika Pandas gagal menentukan engine, ini akan memaksa openpyxl (untuk .xlsx dan .xls modern)
+            df_template = pd.read_excel(uploaded_file, header=0, engine=engine) 
+            
             required_cols = ['Material', 'Min', 'Max']
             if not all(col in df_template.columns for col in required_cols):
                 st.error(f"Template harus memiliki kolom: {', '.join(required_cols)}")
@@ -97,7 +103,9 @@ def show_retail2_content():
     def load_replenishment_template_manual(file_path):
         """Memuat dan memproses data template replenishment dari jalur file yang ditentukan."""
         try:
-            df_template = pd.read_excel(file_path, header=0) 
+            # 🔥 Perbaikan: Tetapkan engine openpyxl untuk kompatibilitas yang lebih baik
+            df_template = pd.read_excel(file_path, header=0, engine='openpyxl') 
+            
             required_cols = ['Material', 'Min', 'Max']
             if not all(col in df_template.columns for col in required_cols):
                 st.error(f"Template manual harus memiliki kolom: {', '.join(required_cols)}")
@@ -164,7 +172,6 @@ def show_retail2_content():
         df_template = None
         
         if template_mode == 'Upload File':
-            # 🔥 PERUBAHAN DI SINI: Menambahkan .xls
             uploaded_template = st.file_uploader(
                 "Upload Template Min/Max (.xlsx, .xls, .csv)",
                 type=['xlsx', 'xls', 'csv']
