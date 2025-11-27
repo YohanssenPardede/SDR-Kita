@@ -82,12 +82,20 @@ def show_retail2_content():
         if uploaded_file is None:
             return None
         try:
-            # 🔥 Perbaikan: Coba tentukan engine berdasarkan ekstensi
             file_extension = uploaded_file.name.split('.')[-1].lower()
-            engine = 'openpyxl' if file_extension in ['xlsx', 'xls'] else None
             
-            # Jika Pandas gagal menentukan engine, ini akan memaksa openpyxl (untuk .xlsx dan .xls modern)
-            df_template = pd.read_excel(uploaded_file, header=0, engine=engine) 
+            # 🔥 Perbaikan: Tentukan engine secara eksplisit
+            if file_extension == 'xls':
+                # Menggunakan engine xlrd untuk format Excel lama (.xls).
+                # CATATAN: Engine ini mungkin memerlukan library 'xlrd' terinstal.
+                df_template = pd.read_excel(uploaded_file, header=0, engine='xlrd')
+            elif file_extension == 'xlsx':
+                # Menggunakan engine openpyxl untuk format Excel baru (.xlsx).
+                df_template = pd.read_excel(uploaded_file, header=0, engine='openpyxl')
+            else:
+                # Untuk CSV atau format lain, biarkan Pandas menentukan
+                df_template = pd.read_excel(uploaded_file, header=0, engine=None) 
+
             
             required_cols = ['Material', 'Min', 'Max']
             if not all(col in df_template.columns for col in required_cols):
