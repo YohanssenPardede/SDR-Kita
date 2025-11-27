@@ -86,9 +86,16 @@ def show_retail2_content():
             
             # 🔥 Perbaikan: Tentukan engine secara eksplisit
             if file_extension == 'xls':
-                # Menggunakan engine xlrd untuk format Excel lama (.xls).
-                # CATATAN: Engine ini mungkin memerlukan library 'xlrd' terinstal.
-                df_template = pd.read_excel(uploaded_file, header=0, engine='xlrd')
+                try:
+                    # Menggunakan engine xlrd untuk format Excel lama (.xls).
+                    df_template = pd.read_excel(uploaded_file, header=0, engine='xlrd')
+                except ImportError:
+                    # Jika xlrd tidak ada, lemparkan Exception custom yang akan ditangkap di luar
+                    raise Exception("Missing optional dependency 'xlrd'. Untuk membaca file .xls, Anda harus menginstalnya atau mengubah format file menjadi .xlsx.")
+                except ValueError as ve:
+                    # Tangani error file bukan zip/format tidak terbaca oleh xlrd
+                    raise Exception(f"File .xls tidak dapat dibaca: {ve}. Coba simpan ulang file sebagai .xlsx.")
+
             elif file_extension == 'xlsx':
                 # Menggunakan engine openpyxl untuk format Excel baru (.xlsx).
                 df_template = pd.read_excel(uploaded_file, header=0, engine='openpyxl')
@@ -111,7 +118,7 @@ def show_retail2_content():
     def load_replenishment_template_manual(file_path):
         """Memuat dan memproses data template replenishment dari jalur file yang ditentukan."""
         try:
-            # 🔥 Perbaikan: Tetapkan engine openpyxl untuk kompatibilitas yang lebih baik
+            # Tetapkan engine openpyxl untuk kompatibilitas yang lebih baik
             df_template = pd.read_excel(file_path, header=0, engine='openpyxl') 
             
             required_cols = ['Material', 'Min', 'Max']
