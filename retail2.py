@@ -164,9 +164,10 @@ def show_retail2_content():
         df_template = None
         
         if template_mode == 'Upload File':
+            # 🔥 PERUBAHAN DI SINI: Menambahkan .xls
             uploaded_template = st.file_uploader(
-                "Upload Template Min/Max (.xlsx)",
-                type=['xlsx', 'csv']
+                "Upload Template Min/Max (.xlsx, .xls, .csv)",
+                type=['xlsx', 'xls', 'csv']
             )
             df_template = load_replenishment_template_upload(uploaded_template)
         
@@ -203,7 +204,7 @@ def show_retail2_content():
             avg_cols = [col for col in df.columns if 'Avg' in col and 'Box' in col]
             default_index = avg_cols.index('Avg Picking (Month-1) in Box') if 'Avg Picking (Month-1) in Box' in avg_cols else 0
             
-            col_calc, col_mult_min, col_mult_max = st.columns(3) # 🔥 3 KOLOM UNTUK SLIDER
+            col_calc, col_mult_min, col_mult_max = st.columns(3)
 
             with col_calc:
                 chosen_avg_column = st.selectbox(
@@ -212,7 +213,6 @@ def show_retail2_content():
                     index=default_index
                 )
             
-            # 🔥 SLIDER BARU UNTUK MIN REPLENISHMENT
             with col_mult_min:
                 min_multiplier = st.slider(
                     "Pengali untuk Min Replenishment:",
@@ -223,7 +223,6 @@ def show_retail2_content():
                     help="Min Replenishment = Basis Rata-Rata * Pengali ini"
                 )
 
-            # SLIDER UNTUK MAX REPLENISHMENT
             with col_mult_max:
                 max_multiplier = st.slider(
                     "Pengali untuk Max Replenishment:",
@@ -234,7 +233,6 @@ def show_retail2_content():
                 )
 
             # 2. Kalkulasi Min/Max Replenishment
-            # 🔥 Mempassing kedua multiplier ke fungsi
             df_full_result = calculate_replenishment(df.copy(), chosen_avg_column, min_multiplier, max_multiplier)
 
             # --- FITUR PENCARIAN ---
@@ -294,7 +292,6 @@ def show_retail2_content():
                 df_template_merged['Max'] = df_template_merged['Max Replenishment'].combine_first(df_template_merged['Max'])
                 
                 # 4. Bersihkan kolom bantu dan siapkan untuk download
-                # Kolom template asli (termasuk header template) dipertahankan di sini.
                 df_template_updated = df_template_merged.drop(columns=['Material ID', 'Min Replenishment (Pcs)', 'Max Replenishment'], errors='ignore')
                 
                 st.write("Preview Template yang Diperbarui (10 baris pertama):")
