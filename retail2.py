@@ -202,7 +202,7 @@ def show_retail2_content():
         df = load_and_process_main_data(uploaded_file)
 
         if df is not None:
-            st.success("Data Stok Utama berhasil dimuat!")
+            # st.success("Data Stok Utama berhasil dimuat!")
 
             # 1. Penggabungan Data (Merge UoM)
             try:
@@ -346,4 +346,5 @@ def show_retail2_content():
 
 # Panggil fungsi utama
 show_retail2_content()
+
 
