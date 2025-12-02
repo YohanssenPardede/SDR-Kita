@@ -59,7 +59,7 @@ def show_retail2_content():
 
     @st.cache_data
     def load_uom_data_manual(file_path):
-        """Memuat dan memproses data UoM secara manual dari jalur file yang ditentukan."""
+        """Memuat dan memproses data UoM secara manual dari file yang ditentukan."""
         try:
             df_uom = pd.read_excel(file_path)
             if 'Material' not in df_uom.columns or 'UOM(in BUn)' not in df_uom.columns:
@@ -171,7 +171,7 @@ def show_retail2_content():
         )
     # KOLOM 2: Data UoM (Manual)
     with col2:
-        st.info(f"2. Data UoM dibaca otomatis dari: \n`{FILE_PATH_UOM_MANUAL}`")
+        # st.info(f"2. Data UoM dibaca otomatis dari: \n`{FILE_PATH_UOM_MANUAL}`")
         df_uom = load_uom_data_manual(FILE_PATH_UOM_MANUAL)
         if df_uom is None:
             st.stop()
@@ -215,7 +215,7 @@ def show_retail2_content():
                 )
                 df.rename(columns={'UOM(in BUn)': 'Pcs per Box'}, inplace=True)
                 df.drop(columns=['Material'], inplace=True)
-                st.info("Data UoM telah berhasil digabungkan (Merged).")
+                # st.info("Data UoM telah berhasil digabungkan (Merged).")
             except Exception as e:
                 st.error(f"Gagal saat menggabungkan data UoM: {e}")
                 st.stop()
@@ -346,3 +346,4 @@ def show_retail2_content():
 
 # Panggil fungsi utama
 show_retail2_content()
+
