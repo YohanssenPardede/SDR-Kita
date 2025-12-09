@@ -11,18 +11,15 @@ st.set_page_config(
 def main():
     st.title("SDR Kita")
     
-    # Membuat dua tab
-    tab1 = st.tabs(["Retail by Min-Max"])
+    # Unpack the list returned by st.tabs() into a single variable
+    tab1_container, = st.tabs(["Retail by Min-Max"])
 
-    # with tab1:
-    #     # Memanggil fungsi dari file app.py
-    #     show_retail1_content() 
-
-    with tab1:
+    with tab1_container: # Use the unpacked container variable
         # Memanggil fungsi dari file retail.py
         show_retail2_content()
 
 if __name__ == "__main__":
     main()
+
 
 
