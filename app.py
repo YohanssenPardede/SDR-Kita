@@ -12,16 +12,17 @@ def main():
     st.title("SDR Kita")
     
     # Membuat dua tab
-    tab2, tab1 = st.tabs(["Retail by Min-Max", "Retail by Interval"])
+    tab1 = st.tabs(["Retail by Min-Max"])
+
+    # with tab1:
+    #     # Memanggil fungsi dari file app.py
+    #     show_retail1_content() 
 
     with tab1:
-        # Memanggil fungsi dari file app.py
-        show_retail1_content() 
-
-    with tab2:
         # Memanggil fungsi dari file retail.py
         show_retail2_content()
 
 if __name__ == "__main__":
     main()
+
 
