@@ -112,6 +112,11 @@ def show_retail2_content():
             df.to_excel(writer, index=False, sheet_name='Replenishment_Update')
         return output.getvalue()
 
+    def robust_key_cleaning(series):
+        """Membersihkan kunci pencocokan: hapus .0, konversi ke string, dan hapus spasi."""
+        # Konversi ke string, lalu hapus '.0' di akhir (format float Excel), lalu hapus spasi
+        return series.astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+
     ## 🚀 Streamlit App
     st.title("📦 Retail Replenishment Min Max Planning")
 
@@ -138,17 +143,21 @@ def show_retail2_content():
         if df_main is not None:
             st.success("Data berhasil dimuat!")
 
-            # 1. Merge UoM
+            # 1. Merge UoM dengan pembersihan kunci yang kuat
             try:
+                # Bersihkan kunci sebelum merge
+                df_main['Material ID Clean'] = robust_key_cleaning(df_main['Material ID'])
+                df_uom['Material Clean'] = robust_key_cleaning(df_uom['Material'])
+
                 df_merged = pd.merge(
                     df_main,
-                    df_uom[['Material', 'UOM(in BUn)']],
-                    left_on='Material ID',
-                    right_on='Material',
+                    df_uom[['Material Clean', 'UOM(in BUn)']],
+                    left_on='Material ID Clean',
+                    right_on='Material Clean',
                     how='left'
                 )
                 df_merged.rename(columns={'UOM(in BUn)': 'Pcs per Box'}, inplace=True)
-                df_merged.drop(columns=['Material'], inplace=True)
+                df_merged.drop(columns=['Material Clean', 'Material ID Clean'], inplace=True)
             except Exception as e:
                 st.error(f"Gagal Merge UoM: {e}")
                 st.stop()
@@ -186,37 +195,38 @@ def show_retail2_content():
 
             # --- Download Logic ---
             if df_template is not None:
-                st.subheader("🔄 Pembaruan Template (Filtering Match)")
+                st.subheader("🔄 Pembaruan Template (Logika Matched)")
                 
-                # Menyiapkan data untuk update
+                # Pembersihan kunci secara agresif pada kedua sisi
+                df_template['Material_Clean'] = robust_key_cleaning(df_template['Material'])
+                
                 update_data = df_full_result[['Material ID', 'Min Replenishment (Pcs)', 'Max Replenishment']].copy()
+                update_data['Material_ID_Clean'] = robust_key_cleaning(update_data['Material ID'])
                 
-                # Konversi kunci ke string untuk memastikan kecocokan 100%
-                df_template['Material'] = df_template['Material'].astype(str)
-                update_data['Material ID'] = update_data['Material ID'].astype(str)
-                
-                # 🔥 LOGIKA UTAMA: INNER JOIN (Hanya menyimpan baris yang ada di kedua file)
-                # Ini otomatis menghapus baris di template yang tidak ada di data Stok Utama
+                # Gunakan INNER JOIN jika ingin menghapus baris tak cocok, 
+                # atau LEFT JOIN jika ingin tetap menyimpan semua baris template namun hanya mengupdate yang cocok.
+                # Menggunakan INNER JOIN sesuai permintaan sebelumnya agar file bersih dari item tak terpakai.
                 df_template_updated = pd.merge(
                     df_template, 
                     update_data, 
-                    left_on='Material', 
-                    right_on='Material ID', 
+                    left_on='Material_Clean', 
+                    right_on='Material_ID_Clean', 
                     how='inner' 
                 )
 
-                # Update nilai Min dan Max dari hasil kalkulasi
+                # Update nilai Min dan Max
                 df_template_updated['Min'] = df_template_updated['Min Replenishment (Pcs)']
                 df_template_updated['Max'] = df_template_updated['Max Replenishment']
                 
-                # Buang kolom bantu hasil join
-                df_template_updated = df_template_updated.drop(columns=['Material ID', 'Min Replenishment (Pcs)', 'Max Replenishment'], errors='ignore')
+                # Buang kolom bantu
+                drop_cols = ['Material_Clean', 'Material_ID_Clean', 'Material ID', 'Min Replenishment (Pcs)', 'Max Replenishment']
+                df_template_updated = df_template_updated.drop(columns=drop_cols, errors='ignore')
                 
-                st.write(f"Baris Template setelah difilter: {len(df_template_updated)} baris.")
+                st.success(f"Berhasil mencocokkan {len(df_template_updated)} item. Item yang tidak ditemukan di laporan stok telah dihapus dari template.")
                 st.dataframe(df_template_updated.head(10), use_container_width=True)
                 
                 df_download = df_template_updated
-                file_name = 'retail_replenishment_TEMPLATE_MATCHED.xlsx'
+                file_name = 'retail_replenishment_TEMPLATE_CLEANED.xlsx'
             else:
                 df_download = df_filtered[display_cols]
                 file_name = 'analysis_result.xlsx'
